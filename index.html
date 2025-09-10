@@ -16,7 +16,7 @@ body { margin:0; overflow:hidden; font-family:sans-serif; }
 #controls-ui {
   position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6);
   color:white; padding:15px; border-radius:10px; z-index:10;
-  max-width:200px; font-size:0.9em;
+  max-width:220px; font-size:0.9em;
 }
 #controls-ui h3 { margin-top:0; color:#4facfe; }
 </style>
@@ -34,6 +34,7 @@ body { margin:0; overflow:hidden; font-family:sans-serif; }
   <p><strong>A</strong> : Move left</p>
   <p><strong>D</strong> : Move right</p>
   <p><strong>Shift</strong> : Hold to move faster</p>
+  <p><strong>Space</strong> : Jump</p>
   <p><strong>R</strong> : Reset position</p>
   <p>Click anywhere to lock mouse and start exploring</p>
 </div>
@@ -45,10 +46,13 @@ body { margin:0; overflow:hidden; font-family:sans-serif; }
 <script>
 let camera, scene, renderer, controls;
 let loadedParts = 0, totalParts = 9;
-const move = {forward:false, backward:false, left:false, right:false, boost:false};
+const move = {forward:false, backward:false, left:false, right:false, boost:false, jump:false};
+let velocityY = 0; // vertical velocity for jumping/gravity
+const gravity = -0.01;
+let canJump = true;
 
-// Starting/reset position
-const startPosition = new THREE.Vector3(0, 1.6, 0); // 5 steps forward (Z=0 instead of Z=5)
+// Starting/reset position (moved forward by additional 10m)
+const startPosition = new THREE.Vector3(0, 1.6, -10);
 
 init();
 animate();
@@ -87,7 +91,6 @@ function init() {
             if('roughness' in obj.material) obj.material.roughness = 0.9;
           }
         });
-
         scene.add(gltf.scene);
         loadedParts++;
         document.getElementById('progress').style.width = (loadedParts/totalParts*100)+'%';
@@ -98,13 +101,12 @@ function init() {
     );
   }
 
-  // Add ground plane (huge, white)
-  const groundGeo = new THREE.PlaneGeometry(1000, 1000);
+  // Add ground plane (white, double size)
+  const groundGeo = new THREE.PlaneGeometry(2000, 2000);
   const groundMat = new THREE.MeshStandardMaterial({color:0xffffff, roughness:1, metalness:0});
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI/2;
   ground.position.y = 0;
-  ground.receiveShadow = true;
   scene.add(ground);
 
   window.addEventListener('resize', () => {
@@ -121,7 +123,8 @@ function init() {
       case 'KeyA': move.left=true; break;
       case 'KeyD': move.right=true; break;
       case 'ShiftLeft': move.boost=true; break;
-      case 'KeyR': controls.getObject().position.copy(startPosition); break;
+      case 'Space': if(canJump){ velocityY = 0.2; canJump = false; } break;
+      case 'KeyR': controls.getObject().position.copy(startPosition); velocityY = 0; break;
     }
   });
   document.addEventListener('keyup', e => {
@@ -146,6 +149,16 @@ function animate() {
     if(move.backward) controls.moveForward(-speed);
     if(move.left) controls.moveRight(-speed);
     if(move.right) controls.moveRight(speed);
+
+    // Jumping / gravity
+    velocityY += gravity;
+    controls.getObject().position.y += velocityY;
+
+    if(controls.getObject().position.y < 1.6){ 
+      velocityY = 0;
+      controls.getObject().position.y = 1.6;
+      canJump = true;
+    }
   }
 
   renderer.render(scene, camera);
